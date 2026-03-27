@@ -91,3 +91,17 @@ In order to run the game, open a seperate terminal from this repository and run:
 ```sh
   python run_game.py
 ```
+
+### Hyper parameter exploration
+
+We explore the effect of the exploration constant Cp and rollout depth by testing the vanilla MCTS agent against 3 heuristic ones and varying the parameter of interest. By running the following command we simulate a number of battlesnake games, for which each game includes one MCTS agent and 3 Heuristic ones. The code keeps track of the average turns, wining rates as well as the trueskill score, saves the results in a npz file, and plots them as well in the same folder. 
+
+For testing the Cp by running 1000 games you can run in terminal:
+```sh
+  python tournament.py --games 1000 --test Cp   
+```
+
+For testing the rollout depth by running 1000 games you can run in terminal:
+```sh
+  python tournament.py --games 1000 --test depth   
+```

@@ -26,7 +26,6 @@ class MCTSNode:
         random.shuffle(self.untried_moves)
 
     def uct_select(self, exploration_constant=1.41):
-        #  Hyperparameter C (1.41)
         return max(self.children, key=lambda c: (c.wins / c.visits) + 
                    exploration_constant * math.sqrt(math.log(self.visits) / c.visits))
 
@@ -34,7 +33,7 @@ class MCTSNode:
         self.visits += 1
         self.wins += score
 
-def rollout(state):
+def rollout(state, max_rollout=80):
     """
     Simulates a random playout from the given state up tp the rollout depth or until a terminal state is reached. The function returns a heuristic score based on survival and length growth during the rollout.
     The survival component rewards the snake for staying alive for more turns, while the length component encourages growth and maintaining a longer body. The score is normalized to be between 0.0 and 1.0, 
@@ -45,8 +44,6 @@ def rollout(state):
     
     curr = state
     steps = 0
-    max_rollout = 80
-    
     start_length = len(state['you']['body'])
     
     while steps < max_rollout:
@@ -119,20 +116,13 @@ def reward(curr, steps, max_rollout, start_length):
     if not is_terminal(curr):
         survival_reward = 0.8
     else:
-        # Penalty for dying: only get a fraction of the 80% weight
-        survival_reward = (steps / max_rollout) * 0.4  # Max 0.4 to ensure death is always worse than life
+        survival_reward = (steps / max_rollout) * 0.4
     
-    # 2. Length Component (20% weight) - We reward both the absolute length and the growth during the rollout.
     current_length = len(curr['you']['body'])
     growth = current_length - start_length
-    
-    # Normalize length: assume a length of 20 is "well fed" - (current_length / 20) capped at 1.0, then multiplied by 0.2 weight
     length_reward = min(current_length / 20, 1.0) * 0.15 
-    growth_reward = min(growth, 5) / 5 * 0.05 # Bonus for eating
-    
-    total_score = survival_reward + length_reward + growth_reward
-    
-    return max(0, min(1.0, total_score))
+    growth_reward = min(growth, 5) / 5 * 0.05
+    return max(0, min(1.0, survival_reward + length_reward + growth_reward))
 
 def get_next_state(game_state, my_move):
     """
@@ -214,7 +204,7 @@ def is_terminal(state):
     return False
 
 
-def mcts_agent(game_state, heuristic = False, competitive = False) -> typing.Dict:
+def mcts_agent(game_state, heuristic=False, competitive=False, exploration_constant=1.41, max_rollout=80) -> typing.Dict:
     """
     An implementation of a Monte Carlo Tree Search (MCTS) agent for Battlesnake. The agent builds a search tree of game states, simulates random playouts to evaluate potential moves, 
     and selects the move that leads to the most promising outcomes based on visit counts. The MCTS agent is operating within an 800ms time budget. The final move decision is based on 
@@ -239,13 +229,11 @@ def mcts_agent(game_state, heuristic = False, competitive = False) -> typing.Dic
     
     # 800ms Time Budget
     iterations = 0
-    while time.time() - start_time < 0.8:
-        iterations += 1
+    while time.time() - start_time < 0.1:
         node = root
-        
         # 1. Selection
         while node.children and not node.untried_moves:
-            node = node.uct_select()
+            node = node.uct_select(exploration_constant=exploration_constant)
             if node.state is None: break
 
         # 2. Expansion
@@ -257,13 +245,7 @@ def mcts_agent(game_state, heuristic = False, competitive = False) -> typing.Dic
             node = new_node
 
         # 3. Simulation
-        if heuristic:
-            if competitive:
-                score = rollout_heuristic(node.state, competitive=True)
-            else:
-                score = rollout_heuristic(node.state, competitive=False)
-        else:
-            score = rollout(node.state)
+        score = rollout(node.state, max_rollout=max_rollout)
 
         # 4. Backpropagation
         curr = node
@@ -271,7 +253,7 @@ def mcts_agent(game_state, heuristic = False, competitive = False) -> typing.Dic
             curr.update(score)
             curr = curr.parent
 
-    print(f"MCTS completed {iterations} iterations.")
+    #print(f"MCTS completed {iterations} iterations.")
     
     if not root.children:
         return {"move": "down"}
@@ -279,11 +261,9 @@ def mcts_agent(game_state, heuristic = False, competitive = False) -> typing.Dic
     # Final Decision: Choose child with highest visit count
     valid_children = [c for c in root.children if c.state is not None]
     if not valid_children:
-        # Fallback if all children are "Death"
         for m in ["up", "down", "left", "right"]:
             if get_next_state(game_state, m) is not None: return {"move": m}
         return {"move": "up"}
-
     best_child = max(valid_children, key=lambda c: c.visits)
     return {"move": best_child.move}
 
