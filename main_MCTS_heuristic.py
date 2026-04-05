@@ -30,7 +30,7 @@ if __name__ == "__main__":
     run_server({
         "info": info, 
         "start": start, 
-        "move": lambda gs: mcts_agent(gs, True, is_comp), 
+        "move": lambda gs: mcts_agent(gs, heuristic=True, competitive=is_comp, paranoid=False), 
         "end": end
     }, port=args.port)
 

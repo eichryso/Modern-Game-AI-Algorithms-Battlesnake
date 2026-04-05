@@ -98,10 +98,29 @@ We explore the effect of the exploration constant Cp and rollout depth by testin
 
 For testing the Cp by running 1000 games you can run in terminal:
 ```sh
-  python tournament.py --games 1000 --test Cp   
+  python tournament.py --games 1000 --test "Cp"   
 ```
 
 For testing the rollout depth by running 1000 games you can run in terminal:
 ```sh
-  python tournament.py --games 1000 --test depth   
+  python tournament.py --games 1000 --test "depth"
 ```
+
+For testing the Pb by running 1000 games you can run in terminal:
+```sh
+  python tournament.py --games 1000 --test "pb_weight"  
+```
+
+
+### Strategy comparisson 
+
+For testing performance of our 2 heuristic (Friendly, Competitive) against 2 MCTS agents (with random and heuristic rollout) you can run 1000 games in terminal through:
+```sh
+  python tournament.py --games 1000 --test "2MCTS2HEUR"
+```
+
+Similarly, for testing performance of our 2 MCTS agents with the improvements (Progressive Bias, RAVE) against 2 MCTS agents (with random and heuristic rollout) you can run 1000 games in terminal through:
+```sh
+  python tournament.py --games 1000 --test "MCTS_VARIATIONS"
+```
+

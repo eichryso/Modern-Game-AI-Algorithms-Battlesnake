@@ -3,6 +3,7 @@ import time
 import random
 import typing
 import argparse
+from collections import defaultdict
 from main_heuristic import heuristic_agent, start, end
 
 class MCTSNode:
@@ -15,19 +16,59 @@ class MCTSNode:
     - parent (MCTSNode): The parent node in the search tree (default None).
     - move (str): The move that led to this node (default None).
     """
-    def __init__(self, state, parent=None, move=None):
+    def __init__(self, state, parent=None, move=None, is_opponent_turn=False):
         self.state = state
         self.parent = parent
         self.move = move
         self.children = []
         self.wins = 0
         self.visits = 0
+        self.is_opponent_turn = is_opponent_turn 
+        
+        # RAVE/AMAF Statistics
+        self.rave_visits = defaultdict(int)  # Key: move string, Value: count
+        self.rave_wins = defaultdict(float)  # Key: move string, Value: sum of scores
+        
+        # Improvement: Progressive History / Heuristic Ranking
+        # We initialize untried moves. If we want the teammate's ranking, 
+        # we'll sort them during the first expansion step.
         self.untried_moves = ["up", "down", "left", "right"]
         random.shuffle(self.untried_moves)
+        self.heuristic_score = 0.0
 
-    def uct_select(self, exploration_constant=1.41):
-        return max(self.children, key=lambda c: (c.wins / c.visits) + 
-                   exploration_constant * math.sqrt(math.log(self.visits) / c.visits))
+    def uct_select(self, exploration_constant=1.41, pb_weight=0.0, rave=False, rave_k=100):
+        """
+        Selection logic incorporating UCB1, Progressive Bias, and optionally RAVE.
+        """
+        log_parent = math.log(max(1, self.visits))
+
+        def score_function(c):
+            if c.visits == 0:
+                return float('inf')
+            
+            # 1. Standard MCTS (Exploitation)
+            q = c.wins / c.visits
+            
+            # 2. RAVE Integration
+            if rave:
+                rv = self.rave_visits[c.move]
+                if rv > 0:
+                    q_rave = self.rave_wins[c.move] / rv
+                    # Beta parameter: decays as visits increase
+                    beta = math.sqrt(rave_k / (3 * c.visits + rave_k))
+                    q = (1 - beta) * q + beta * q_rave
+
+            # 3. Exploration (UCB1)
+            exploration = exploration_constant * math.sqrt(log_parent / c.visits)
+            
+            # 4. Progressive Bias
+            bias = 0.0
+            if pb_weight > 0:
+                bias = (pb_weight * c.heuristic_score) / (c.visits + 1)
+                
+            return q + exploration + bias
+
+        return max(self.children, key=score_function)
 
     def update(self, score):
         self.visits += 1
@@ -99,6 +140,33 @@ def rollout_heuristic(state, competitive: bool):
     reward_score = reward(curr, steps, max_rollout, start_length)
     
     return reward_score
+
+def rollout_with_history(state, max_rollout, heuristic, competitive):
+    """Modified rollout that returns the score AND the list of moves made."""
+    if state is None: return 0, []
+    
+    curr = state
+    steps = 0
+    start_length = len(state['you']['body'])
+    move_history = []
+    
+    while steps < max_rollout:
+        if is_terminal(curr): break
+        
+        if heuristic:
+            res = heuristic_agent(curr, competitive=competitive, mcts_use=True)
+            move = res["move"]
+        else:
+            valid = ["up", "down", "left", "right"]
+            move = random.choice(valid)
+            
+        move_history.append(move)
+        next_s = get_next_state(curr, move)
+        if next_s is None: break
+        curr = next_s
+        steps += 1
+        
+    return reward(curr, steps, max_rollout, start_length), move_history
 
 def reward(curr, steps, max_rollout, start_length):
     """
@@ -204,7 +272,9 @@ def is_terminal(state):
     return False
 
 
-def mcts_agent(game_state, heuristic=False, competitive=False, exploration_constant=1.41, max_rollout=80) -> typing.Dict:
+def mcts_agent(game_state, heuristic=False, competitive=False, 
+               exploration_constant=5.6, max_rollout=80, 
+               pb_weight=10.0, rave=False) -> typing.Dict:
     """
     An implementation of a Monte Carlo Tree Search (MCTS) agent for Battlesnake. The agent builds a search tree of game states, simulates random playouts to evaluate potential moves, 
     and selects the move that leads to the most promising outcomes based on visit counts. The MCTS agent is operating within an 800ms time budget. The final move decision is based on 
@@ -220,6 +290,7 @@ def mcts_agent(game_state, heuristic=False, competitive=False, exploration_const
     Returns:
     - dict: The chosen move direction based on the MCTS algorithm.
     """
+    # Pre-calculate sets for collision detection
     game_state['_food_set'] = set((f['x'], f['y']) for f in game_state['board']['food'])
     game_state['_hazard_set'] = set((h['x'], h['y']) for h in game_state['board']['hazards'])
     game_state['_obstacle_set'] = set((p['x'], p['y']) for s in game_state['board']['snakes'] for p in s['body'])
@@ -227,43 +298,71 @@ def mcts_agent(game_state, heuristic=False, competitive=False, exploration_const
     root = MCTSNode(game_state)
     start_time = time.time()
     
-    # 800ms Time Budget
-    iterations = 0
+    # Heuristic Ranking for Root Expansion (Progressive History)
+    if rave:
+        # Sort root's untried moves using the heuristic before starting
+        scored_moves = []
+        for m in root.untried_moves:
+            ns = get_next_state(game_state, m)
+            score = reward(ns, 0, max_rollout, len(game_state['you']['body'])) if ns else -1
+            scored_moves.append((m, score))
+        scored_moves.sort(key=lambda x: x[1], reverse=True)
+        root.untried_moves = [m for m, s in scored_moves]
+
+    # Time Budget: 0.1 for testing or 0.8 for production
     while time.time() - start_time < 0.1:
         node = root
+        search_path = [node]
+        
         # 1. Selection
         while node.children and not node.untried_moves:
-            node = node.uct_select(exploration_constant=exploration_constant)
+            node = node.uct_select(exploration_constant=exploration_constant, 
+                                   pb_weight=pb_weight, rave=rave)
+            search_path.append(node)
             if node.state is None: break
 
         # 2. Expansion
         if node.untried_moves and node.state is not None:
-            move = node.untried_moves.pop()
+            # If RAVE is on, we take the best heuristic move (front of list)
+            move = node.untried_moves.pop(0 if rave else -1)
             next_state = get_next_state(node.state, move)
             new_node = MCTSNode(next_state, parent=node, move=move)
+            
+            if next_state is not None:
+                new_node.heuristic_score = reward(next_state, 0, max_rollout, len(game_state['you']['body']))
+            
             node.children.append(new_node)
             node = new_node
+            search_path.append(node)
 
         # 3. Simulation
-        score = rollout(node.state, max_rollout=max_rollout)
+        # For RAVE, we need the sequence of moves made in the rollout
+        if rave:
+            score, rollout_moves = rollout_with_history(node.state, max_rollout, heuristic, competitive)
+        else:
+            if heuristic:
+                score = rollout_heuristic(node.state, competitive=competitive)
+            else:
+                score = rollout(node.state, max_rollout=max_rollout)
+            rollout_moves = []
 
         # 4. Backpropagation
-        curr = node
-        while curr:
-            curr.update(score)
-            curr = curr.parent
+        rollout_move_set = set(rollout_moves)
+        for ancestor in reversed(search_path):
+            ancestor.update(score)
+            # RAVE Update: Update AMAF stats for every move seen in the rollout
+            if rave:
+                for m in rollout_move_set:
+                    ancestor.rave_visits[m] += 1
+                    ancestor.rave_wins[m] += score
 
-    #print(f"MCTS completed {iterations} iterations.")
-    
-    if not root.children:
-        return {"move": "down"}
-
-    # Final Decision: Choose child with highest visit count
+    # Final Decision
     valid_children = [c for c in root.children if c.state is not None]
     if not valid_children:
         for m in ["up", "down", "left", "right"]:
             if get_next_state(game_state, m) is not None: return {"move": m}
         return {"move": "up"}
+        
     best_child = max(valid_children, key=lambda c: c.visits)
     return {"move": best_child.move}
 

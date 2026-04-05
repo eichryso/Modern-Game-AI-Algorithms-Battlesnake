@@ -26,10 +26,6 @@ def _add(pos: tuple, d: str) -> tuple:
     return (pos[0] + dx, pos[1] + dy)
 
 
-def _manhattan(a: tuple, b: tuple) -> int:
-    return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-
 class Snake:
     def __init__(self, id_: str, body: list[tuple], health: int, length: int):
         self.id = id_
