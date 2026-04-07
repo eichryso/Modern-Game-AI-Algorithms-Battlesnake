@@ -85,8 +85,8 @@ def _mcts_wrapper(state, snake_id, use_heuristic_rollout, pb_val=2.5, use_rave=F
         api_dict, 
         heuristic=use_heuristic_rollout, 
         competitive=False,
-        exploration_constant=7.9,
-        max_rollout=120,
+        exploration_constant=4.4,
+        max_rollout=20,
         pb_weight=pb_val,
         rave=use_rave
     )
@@ -374,7 +374,7 @@ def run_tournament(n_games, seed, test_type="Cp", opponent="heuristic"):
 
         # 1. TrueSkill Comparison
         ax1.plot(final_vals, final_ts, 'o-', color=mcts_color, linewidth=2, markersize=8, label='MCTS Team')
-        ax1.axhline(y=heur_ts_val, color=heur_color, linestyle='--', linewidth=2, label='Heuristic Baseline')
+        ax1.axhline(y=heur_ts_val, color=heur_color, linestyle='--', linewidth=2, label='Baseline')
         ax1.set_ylabel(r'TrueSkill ($\mu - 3\sigma$)', fontsize=12)
         ax1.set_title(f"Hyperparameter Tuning: {test_type} vs Skill Rating", fontweight='bold')
         ax1.legend(loc='best')
@@ -390,7 +390,7 @@ def run_tournament(n_games, seed, test_type="Cp", opponent="heuristic"):
 
         # 3. Average Survival Turns
         ax3.plot(final_vals, final_avgs, 's-', color=mcts_color, linewidth=2, markersize=8, label='MCTS Avg Survival')
-        ax3.axhline(y=heur_surv_baseline, color=heur_color, linestyle='--', linewidth=2, label='Heuristic Avg Survival')
+        ax3.axhline(y=heur_surv_baseline, color=heur_color, linestyle='--', linewidth=2, label='Baseline Avg Survival')
         ax3.set_xlabel(f"Hyperparameter Value ({test_type})", fontsize=12)
         ax3.set_ylabel("Average Turns", fontsize=12)
         ax3.set_title(f"Hyperparameter Tuning: {test_type} vs Longevity", fontweight='bold')
