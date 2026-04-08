@@ -59,13 +59,13 @@ To run the first case you can open 4 different terminals from this repository an
  python main_mcts.py --port 8000 --name "MCTS 1"
 ```
 ```sh
- python main_mcts.py --port 8001 --name "MCTS 1"
+ python main_mcts.py --port 8001 --name "MCTS 2"
 ```
 ```sh
- python main_mcts.py --port 8002 --name "MCTS 1"
+ python main_mcts.py --port 8002 --name "MCTS 3"
 ```
 ```sh
- python main_mcts.py --port 8003 --name "MCTS 1"
+ python main_mcts.py --port 8003 --name "MCTS 4"
 ```
 For testing the heuristic rollout you can run:
 
