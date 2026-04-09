@@ -5,6 +5,7 @@ import typing
 import argparse
 from collections import defaultdict, deque
 
+
 move_counter = 0
 def manhattan_dist(a, b):
         return abs(a['x'] - b['x']) + abs(a['y'] - b['y'])
@@ -580,29 +581,21 @@ def info() -> typing.Dict:
     }
 
 
+
+   
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--name", type=str, default="MCTS-RAVE-Snake")
+    parser.add_argument("--name", type=str, default="MCTS-Snake")
     parser.add_argument("--color", type=str, default="#695DD1")
     args = parser.parse_args()
-    
     info.snake_color = args.color
     info.snake_name = args.name
-    
     from server import run_server
-    
+
     run_server({
         "info": info, 
         "start": start, 
-        "move": lambda gs: mcts_agent(
-            gs, 
-            heuristic=True, 
-            competitive=False, 
-            exploration_constant=4.4, 
-            max_rollout=20, 
-            pb_weight=6.2, 
-            rave=True
-        ), 
+        "move": lambda gs: mcts_agent(gs, heuristic=False, competitive=False), 
         "end": end
     }, port=args.port)
